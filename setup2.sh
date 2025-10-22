@@ -39,7 +39,7 @@ run_cmd() {
   fi
 }
 
-# === Backup/Restore ===
+# === Backup ===
 backup_file() {
   if [ -f "$1" ]; then
     local backup="$ROLLBACK_DIR/$(basename $1).$(date +%s).bak"
@@ -107,8 +107,7 @@ ntp_setup() {
   run_cmd "apt-get install -y ntp || true"
 
   if systemctl list-unit-files | grep -q '^ntp\.service'; then
-    run_cmd "systemctl enable ntp.service"
-    run_cmd "systemctl start ntp.service"
+    run_cmd "systemctl restart ntp"
   elif systemctl list-unit-files | grep -q '^systemd-timesyncd\.service'; then
     run_cmd "systemctl enable systemd-timesyncd.service"
     run_cmd "systemctl start systemd-timesyncd.service"
