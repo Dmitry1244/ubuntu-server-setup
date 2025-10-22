@@ -1,28 +1,45 @@
 #!/bin/bash
 set -e
 
-# === Framework ===
+# === Цвета ===
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# === Глобальные переменные ===
 DRY_RUN=false
 LOGFILE="setup.log"
 ROLLBACK_DIR="rollback"
+TOTAL_STEPS=0
+FAILED_STEPS=0
+FAILED_LIST=()
+
 mkdir -p "$ROLLBACK_DIR"
 
-log_step() { echo -e "\n[STEP] $1" | tee -a "$LOGFILE"; }
-log_info() { echo "[INFO] $1" | tee -a "$LOGFILE"; }
-log_error() { echo "[ERROR] $1" | tee -a "$LOGFILE"; }
+# === Логирование ===
+log_step() { TOTAL_STEPS=$((TOTAL_STEPS+1)); echo -e "\n${BLUE}[STEP]${NC} $1" | tee -a "$LOGFILE"; }
+log_info() { echo -e "${GREEN}[INFO]${NC} $1" | tee -a "$LOGFILE"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOGFILE"; }
 
+# === Выполнение команд ===
 run_cmd() {
   if $DRY_RUN; then
     log_info "DRY-RUN: $1"
   else
     log_info "EXEC: $1"
-    eval "$1" >>"$LOGFILE" 2>&1 || {
-      log_error "Команда не выполнена: $1"
-      exit 1
-    }
+    bash -c "$1" 2>&1 | tee -a "$LOGFILE"
+    local status=${PIPESTATUS[0]}
+    if [ $status -ne 0 ]; then
+      log_error "Команда завершилась с ошибкой: $1"
+      FAILED_STEPS=$((FAILED_STEPS+1))
+      FAILED_LIST+=("$1")
+    fi
   fi
 }
 
+# === Backup/Restore ===
 backup_file() {
   if [ -f "$1" ]; then
     local backup="$ROLLBACK_DIR/$(basename $1).$(date +%s).bak"
@@ -31,7 +48,18 @@ backup_file() {
   fi
 }
 
-# === Modules as functions ===
+restore_last_backup() {
+  local file="$1"
+  local last_backup=$(ls -t $ROLLBACK_DIR/$(basename $file).* 2>/dev/null | head -n1)
+  if [ -n "$last_backup" ]; then
+    cp "$last_backup" "$file"
+    log_info "Восстановлен $file из $last_backup"
+  else
+    log_error "Нет backup для $file"
+  fi
+}
+
+# === Модули ===
 update_system() {
   log_step "Обновление системы"
   run_cmd "apt-get update -y"
@@ -105,6 +133,23 @@ install_3xui() {
   run_cmd "bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh)"
 }
 
+# === Итоговая сводка ===
+summary() {
+  echo -e "\n${YELLOW}========== ИТОГОВАЯ СВОДКА ==========${NC}"
+  echo -e "Всего шагов: $TOTAL_STEPS"
+  if [ $FAILED_STEPS -eq 0 ]; then
+    echo -e "${GREEN}Все шаги выполнены успешно ✅${NC}"
+  else
+    echo -e "${RED}Ошибок: $FAILED_STEPS ❌${NC}"
+    echo "Проблемные команды:"
+    for cmd in "${FAILED_LIST[@]}"; do
+      echo -e "  - $cmd"
+    done
+    echo -e "Подробности см. в ${YELLOW}setup.log${NC}"
+  fi
+  echo -e "${YELLOW}=====================================${NC}\n"
+}
+
 # === Main ===
 if [[ "$1" == "--dry-run" ]]; then
   DRY_RUN=true
@@ -121,3 +166,5 @@ ntp_setup
 ntp_status
 ssl_selfsigned
 install_3xui
+
+summary
