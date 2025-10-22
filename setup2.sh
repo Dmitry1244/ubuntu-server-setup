@@ -68,7 +68,6 @@ ssh_port() {
   backup_file /etc/ssh/sshd_config
   run_cmd "sed -i 's/^#Port 22/Port 20022/' /etc/ssh/sshd_config"
 
-  # Универсальный перезапуск SSH
   if systemctl list-unit-files | grep -q '^ssh\.service'; then
     run_cmd "systemctl restart ssh"
   else
@@ -133,6 +132,26 @@ ssl_selfsigned() {
     -subj '/CN=$(hostname)'"
 }
 
+auto_updates() {
+  log_step "Включение автоматических обновлений безопасности"
+  run_cmd "apt-get install -y unattended-upgrades"
+  run_cmd "dpkg-reconfigure -f noninteractive unattended-upgrades"
+}
+
+monitoring_tools() {
+  log_step "Установка инструментов мониторинга"
+  run_cmd "apt-get install -y htop iotop iftop"
+}
+
+enable_bbr() {
+  log_step "Включение TCP BBR"
+  run_cmd "echo 'net.core.default_qdisc=fq' >> /etc/sysctl.conf"
+  run_cmd "echo 'net.ipv4.tcp_congestion_control=bbr' >> /etc/sysctl.conf"
+  run_cmd "sysctl -p"
+  run_cmd "sysctl net.ipv4.tcp_congestion_control"
+  run_cmd "lsmod | grep bbr || true"
+}
+
 install_3xui() {
   log_step "Установка панели 3X-UI"
   run_cmd "bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh)"
@@ -170,6 +189,9 @@ sqlite_install
 ntp_setup
 ntp_status
 ssl_selfsigned
+auto_updates
+monitoring_tools
+enable_bbr
 install_3xui
 
 summary
