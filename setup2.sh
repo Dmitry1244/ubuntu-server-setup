@@ -66,19 +66,25 @@ update_system() {
   run_cmd "apt-get upgrade -y"
 }
 
-ssh_port() {
-  log_step "Смена SSH порта на 20022"
-  backup_file /etc/ssh/sshd_config
-  run_cmd "sed -i 's/^#Port 22/Port 20022/' /etc/ssh/sshd_config"
-  run_cmd "systemctl restart sshd"
-}
-
 ufw_setup() {
   log_step "Настройка UFW"
   run_cmd "ufw allow 8443/tcp"
   run_cmd "ufw allow 20022/tcp"
   run_cmd "ufw allow 1985/tcp"
   run_cmd "ufw --force enable"
+}
+
+ssh_port() {
+  log_step "Смена SSH порта на 20022"
+  backup_file /etc/ssh/sshd_config
+  run_cmd "sed -i 's/^#Port 22/Port 20022/' /etc/ssh/sshd_config"
+
+  # Универсальный перезапуск SSH
+  if systemctl list-unit-files | grep -q '^ssh\.service'; then
+    run_cmd "systemctl restart ssh"
+  else
+    run_cmd "systemctl restart sshd"
+  fi
 }
 
 disable_ping() {
@@ -157,8 +163,8 @@ if [[ "$1" == "--dry-run" ]]; then
 fi
 
 update_system
-ssh_port
 ufw_setup
+ssh_port
 disable_ping
 fail2ban_setup
 sqlite_install
