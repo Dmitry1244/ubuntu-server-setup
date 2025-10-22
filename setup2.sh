@@ -48,17 +48,6 @@ backup_file() {
   fi
 }
 
-restore_last_backup() {
-  local file="$1"
-  local last_backup=$(ls -t $ROLLBACK_DIR/$(basename $file).* 2>/dev/null | head -n1)
-  if [ -n "$last_backup" ]; then
-    cp "$last_backup" "$file"
-    log_info "Восстановлен $file из $last_backup"
-  else
-    log_error "Нет backup для $file"
-  fi
-}
-
 # === Модули ===
 update_system() {
   log_step "Обновление системы"
@@ -114,15 +103,26 @@ sqlite_install() {
 }
 
 ntp_setup() {
-  log_step "Установка и настройка NTP"
-  run_cmd "apt-get install -y ntp"
-  run_cmd "systemctl enable ntp"
-  run_cmd "systemctl start ntp"
+  log_step "Установка и настройка NTP/Timesync"
+  run_cmd "apt-get install -y ntp || true"
+
+  if systemctl list-unit-files | grep -q '^ntp\.service'; then
+    run_cmd "systemctl enable ntp.service"
+    run_cmd "systemctl start ntp.service"
+  elif systemctl list-unit-files | grep -q '^systemd-timesyncd\.service'; then
+    run_cmd "systemctl enable systemd-timesyncd.service"
+    run_cmd "systemctl start systemd-timesyncd.service"
+  elif systemctl list-unit-files | grep -q '^chrony\.service'; then
+    run_cmd "systemctl enable chrony.service"
+    run_cmd "systemctl start chrony.service"
+  else
+    log_error "Не найден ни ntp, ни systemd-timesyncd, ни chrony"
+  fi
 }
 
 ntp_status() {
   log_step "Проверка состояния NTP"
-  run_cmd "ntpq -p"
+  run_cmd "ntpq -p || timedatectl show-timesync --all || chronyc tracking"
 }
 
 ssl_selfsigned() {
