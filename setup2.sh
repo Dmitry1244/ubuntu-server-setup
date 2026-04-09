@@ -60,7 +60,6 @@ ufw_setup() {
   run_cmd "ufw allow 8443/tcp"
   run_cmd "ufw allow 20022/tcp"
   run_cmd "ufw allow 1985/tcp"
-  run_cmd "ufw allow 80/tcp"
   run_cmd "ufw --force enable"
 }
 
